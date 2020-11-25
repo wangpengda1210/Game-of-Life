@@ -1,0 +1,513 @@
+type: edu
+custom_name: stage5
+files:
+- name: src/life/GameOfLife.java
+  visible: true
+  text: |
+    package life;
+
+    import javax.swing.*;
+
+    public class GameOfLife extends JFrame {
+        public GameOfLife() {
+            setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            setSize(300, 300);
+            setVisible(true);
+        }
+    }
+  learner_created: false
+- name: test/GameOfLifeTest.java
+  visible: false
+  text: |2-
+
+    import common.GameOfLifeStage5Test;
+
+    public class GameOfLifeTest extends GameOfLifeStage5Test {
+
+    }
+  learner_created: false
+- name: test/common/CheckResultUtil.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.hyperskill.hstest.v6.testcase.CheckResult
+
+    operator fun CheckResult.component1(): Boolean = isCorrect
+    operator fun CheckResult.component2(): String? = feedback
+
+    fun Boolean.toCheckResult() = CheckResult(this, null)
+
+    fun fail(message: String) = CheckResult(false, message)  // TODO: add to repo
+  learner_created: false
+- name: test/common/ClueWithChecker.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.hyperskill.hstest.v6.testcase.CheckResult
+    import org.hyperskill.hstest.v6.testcase.TestCase
+
+    sealed class ClueWithChecker(val input: String) {
+        fun toTestCase(): TestCase<ClueWithChecker> {
+            return TestCase<ClueWithChecker>().setInput(input).setAttach(this)
+        }
+    }
+
+    class ClueWithPredefinedFeedbackChecker(
+            val predefinedFeedback: String,
+            input: String,
+            val checker: (String) -> Boolean
+    ) : ClueWithChecker(input)
+
+    class ClueWithDynamicFeedbackChecker(
+            input: String,
+            val checker: (String) -> CheckResult
+    ) : ClueWithChecker(input)
+
+    fun createPredefinedFeedbackTest(
+            feedback: String,
+            input: String = "",
+            checker: (String) -> Boolean
+    ): TestCase<ClueWithChecker> {
+        return ClueWithPredefinedFeedbackChecker(
+                predefinedFeedback = feedback,
+                input = input,
+                checker = checker
+        ).toTestCase()
+    }
+
+    fun createDynamicFeedbackTest(input: String = "", checker: (String) -> CheckResult): TestCase<ClueWithChecker> {
+        return ClueWithDynamicFeedbackChecker(
+                input = input,
+                checker = checker
+        ).toTestCase()
+    }
+
+    fun checkClueWithCheckerTest(reply: String, clue: ClueWithChecker): CheckResult {
+        return try {
+            when (clue) {
+                is ClueWithDynamicFeedbackChecker -> clue.checker(reply)
+                is ClueWithPredefinedFeedbackChecker -> CheckResult(clue.checker(reply), clue.predefinedFeedback)
+            }
+        } catch (e: AssertionError) {
+            if (clue is ClueWithPredefinedFeedbackChecker) {
+                fail(clue.predefinedFeedback)
+            } else {
+                CheckResult.FALSE
+            }
+        }
+    }
+  learner_created: false
+- name: test/common/GameOfLifeCommonTest.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.assertj.swing.fixture.JLabelFixture
+    import org.hyperskill.hstest.v6.testcase.CheckResult
+
+    fun checkLabelForInteger(labelRequirements: ComponentRequirements<JLabelFixture>): CheckResult {
+        val label = labelRequirements.requireExistingComponent()
+
+        val labelDigits = label.text().trim { !it.isDigit() }
+
+        if (labelDigits.toIntOrNull() == null) {
+            return fail("The '${labelRequirements.name}' label doesn't contain an integer.")
+        }
+
+        return CheckResult.TRUE
+    }
+  learner_created: false
+- name: test/common/GameOfLifeStage4Test.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.assertj.swing.fixture.JLabelFixture
+    import org.hyperskill.hstest.v6.stage.SwingTest
+    import org.hyperskill.hstest.v6.testcase.CheckResult
+    import org.hyperskill.hstest.v6.testcase.TestCase
+    import life.GameOfLife
+
+    abstract class GameOfLifeStage4Test : SwingTest<ClueWithChecker>(GameOfLife()) {
+
+        override fun generate(): List<TestCase<ClueWithChecker>> {
+            val generationLabel = ComponentRequirements("GenerationLabel", isEnabled = true) { window.label(it) }
+            val aliveLabel = ComponentRequirements("AliveLabel", isEnabled = true) { window.label(it) }
+
+            return frameTests(::frame) +
+                    existenceTests(generationLabel, aliveLabel) +
+                    componentsAreEnabledTests(generationLabel, aliveLabel) +
+                    stage4Tests(
+                            generationLabelRequirements = generationLabel,
+                            aliveLabelRequirements = aliveLabel
+                    )
+        }
+
+        override fun check(reply: String, clue: ClueWithChecker): CheckResult {
+            return checkClueWithCheckerTest(reply = reply, clue = clue)
+        }
+    }
+
+    fun stage4Tests(
+            generationLabelRequirements: ComponentRequirements<JLabelFixture>,
+            aliveLabelRequirements: ComponentRequirements<JLabelFixture>
+    ): List<TestCase<ClueWithChecker>> {
+        return listOf(
+                createDynamicFeedbackTest {
+                    with(checkLabelForInteger(generationLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+                    with(checkLabelForInteger(aliveLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+
+                    return@createDynamicFeedbackTest CheckResult.TRUE
+                }
+        )
+    }
+  learner_created: false
+- name: test/common/GameOfLifeStage5Test.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.assertj.swing.fixture.JButtonFixture
+    import org.assertj.swing.fixture.JLabelFixture
+    import org.assertj.swing.fixture.JToggleButtonFixture
+    import org.hyperskill.hstest.v6.common.Utils
+    import org.hyperskill.hstest.v6.stage.SwingTest
+    import org.hyperskill.hstest.v6.testcase.CheckResult
+    import org.hyperskill.hstest.v6.testcase.TestCase
+    import life.GameOfLife
+
+    abstract class GameOfLifeStage5Test : SwingTest<ClueWithChecker>(GameOfLife()) {
+
+        override fun generate(): List<TestCase<ClueWithChecker>> {
+            val generationLabel = ComponentRequirements("GenerationLabel", isEnabled = true) { window.label(it) }
+            val aliveLabel = ComponentRequirements("AliveLabel", isEnabled = true) { window.label(it) }
+
+            val playButton = ComponentRequirements("PlayToggleButton", isEnabled = true) { window.toggleButton(it) }
+            val resetButton = ComponentRequirements("ResetButton", isEnabled = true) { window.button(it) }
+
+            return frameTests(::frame) +
+                    existenceTests(generationLabel, aliveLabel, playButton, resetButton) +
+                    componentsAreEnabledTests(generationLabel, aliveLabel, playButton, resetButton) +
+                    stage5Tests(
+                            generationLabelRequirements = generationLabel,
+                            aliveLabelRequirements = aliveLabel,
+                            playButtonRequirements = playButton,
+                            resetButtonRequirements = resetButton
+                    )
+        }
+
+        override fun check(reply: String, clue: ClueWithChecker): CheckResult {
+            return checkClueWithCheckerTest(reply = reply, clue = clue)
+        }
+    }
+
+    fun stage5Tests(
+            generationLabelRequirements: ComponentRequirements<JLabelFixture>,
+            aliveLabelRequirements: ComponentRequirements<JLabelFixture>,
+            playButtonRequirements: ComponentRequirements<JToggleButtonFixture>,
+            resetButtonRequirements: ComponentRequirements<JButtonFixture>
+    ): List<TestCase<ClueWithChecker>> {
+        return listOf(
+                createPredefinedFeedbackTest("App crashes when reset is clicked") {
+                    val resetButton = resetButtonRequirements.requireExistingComponent()
+
+                    resetButton.click()
+
+                    return@createPredefinedFeedbackTest true
+                },
+
+                createDynamicFeedbackTest {
+                    /*
+                    Flip-flop play button, check labels, reset, flip-flop again, check again
+                    */
+
+                    val playButton = playButtonRequirements.requireExistingComponent()
+
+                    playButton.check()
+                    Utils.sleep(100)
+                    playButton.uncheck()
+
+                    with(checkLabelForInteger(generationLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+                    with(checkLabelForInteger(aliveLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+
+                    val resetButton = resetButtonRequirements.requireExistingComponent()
+                    resetButton.click()
+
+                    Utils.sleep(100)
+
+                    playButton.check()
+                    Utils.sleep(100)
+                    playButton.uncheck()
+
+                    with(checkLabelForInteger(generationLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+                    with(checkLabelForInteger(aliveLabelRequirements)) {
+                        if (!this.isCorrect) {
+                            return@createDynamicFeedbackTest this
+                        }
+                    }
+
+                    return@createDynamicFeedbackTest CheckResult.TRUE
+                }
+        )
+    }
+  learner_created: false
+- name: test/common/UiTestsGenerators.kt
+  visible: false
+  text: |
+    package common
+
+
+    import org.assertj.swing.fixture.AbstractJComponentFixture
+    import org.hyperskill.hstest.v6.stage.SwingTest
+    import org.hyperskill.hstest.v6.testcase.TestCase
+    import javax.swing.JFrame
+
+    fun frameTests(frameGetter: () -> JFrame): List<TestCase<ClueWithChecker>> {
+        return listOf(
+                createPredefinedFeedbackTest("Window is not visible") { frameGetter().isVisible }
+        )
+    }
+
+    class ComponentRequirements<ComponentType : AbstractJComponentFixture<*, *, *>>(
+            val name: String,
+            val isEnabled: Boolean,
+            private val componentFinder: (String) -> ComponentType?
+    ) {
+        val suitableComponent: ComponentType? by lazy { componentFinder(name) }
+    }
+
+    fun existenceTests(vararg components: ComponentRequirements<*>): List<TestCase<ClueWithChecker>> {
+        fun generateExistenceTest(requirements: ComponentRequirements<*>): TestCase<ClueWithChecker> {
+            return createPredefinedFeedbackTest("No suitable component with name '${requirements.name}' is found") {
+                SwingTest.checkExistence { requirements.suitableComponent }
+            }
+        }
+
+        return components.map(::generateExistenceTest)
+    }
+
+    fun componentsAreEnabledTests(vararg components: ComponentRequirements<*>): List<TestCase<ClueWithChecker>> {
+        fun generateIsEnabledTest(requirements: ComponentRequirements<*>): TestCase<ClueWithChecker> {
+            val (desiredState, stateChecker) = if (requirements.isEnabled) {
+                "enabled" to { requirements.requireExistingComponent().isEnabled }
+            } else {
+                "disabled" to { !requirements.requireExistingComponent().isEnabled }
+            }
+
+            return createPredefinedFeedbackTest("The '${requirements.name}' component should be $desiredState") {
+                stateChecker()
+            }
+
+        }
+
+        return components.map(::generateIsEnabledTest)
+    }
+
+    fun <ComponentType : AbstractJComponentFixture<*, *, *>>
+            ComponentRequirements<ComponentType>.requireExistingComponent(): ComponentType {
+        return requireNotNull(this.suitableComponent) {
+            "Must check for the '${this.name}' component existence before this test"
+        }
+    }
+  learner_created: false
+- name: src/life/Universe.java
+  visible: true
+  text: |
+    package life;
+
+    import java.util.Random;
+
+    public class Universe {
+
+        private final Cell[][] cells;
+        private final Cell[][] oldCells;
+
+        public Universe(int size) {
+
+            Random random = new Random();
+
+            cells = new Cell[size][size];
+            oldCells = new Cell[size][size];
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
+                    getCells()[i][j] = new Cell(i, j, random.nextBoolean());
+                    oldCells[i][j] = new Cell(i, j, getCells()[i][j].isAlive());
+                }
+            }
+
+        }
+
+        private Cell[] findNeighbours(Cell cell) {
+
+            Cell[] neighbours = new Cell[8];
+            int cellX = cell.getPositionX();
+            int cellY = cell.getPositionY();
+
+            int leftIndex = cellY == 0 ? getCells().length - 1 : cellY - 1;
+            int rightIndex = cellY == getCells().length - 1 ? 0 : cellY + 1;
+
+            int upIndex = cellX == 0 ? getCells().length - 1 : cellX - 1;
+            int downIndex = cellX == getCells().length - 1 ? 0 : cellX + 1;
+
+            neighbours[0] = oldCells[upIndex][leftIndex];
+            neighbours[1] = oldCells[upIndex][cellY];
+            neighbours[2] = oldCells[upIndex][rightIndex];
+            neighbours[3] = oldCells[cellX][leftIndex];
+            neighbours[4] = oldCells[cellX][rightIndex];
+            neighbours[5] = oldCells[downIndex][leftIndex];
+            neighbours[6] = oldCells[downIndex][cellY];
+            neighbours[7] = oldCells[downIndex][rightIndex];
+
+            return neighbours;
+
+        }
+
+        public void nextGeneration() {
+
+            for (Cell[] line : oldCells) {
+                for (Cell cell : line) {
+
+                    Cell[] neighbours = findNeighbours(cell);
+                    int aliveNeighbours = countAliveNeighbours(neighbours);
+
+                    if (cell.isAlive() && aliveNeighbours != 2 && aliveNeighbours != 3) {
+                        getCells()[cell.getPositionX()][cell.getPositionY()].setAlive(false);
+                    } else if (!cell.isAlive() && aliveNeighbours == 3) {
+                        getCells()[cell.getPositionX()][cell.getPositionY()].setAlive(true);
+                    }
+
+                }
+            }
+
+            for (int i = 0; i < oldCells.length; i++) {
+                for (int j = 0; j < oldCells.length; j++) {
+                    oldCells[i][j] = new Cell(i, j, getCells()[i][j].isAlive());
+                }
+            }
+
+        }
+
+        private int countAliveNeighbours(Cell[] neighbours) {
+            int count = 0;
+            for (Cell neighbour : neighbours) {
+                if (neighbour.isAlive()) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder result = new StringBuilder();
+
+            for (Cell[] line : getCells()) {
+                for (Cell cell : line) {
+                    result.append(cell.isAlive() ? "O" : " ");
+                }
+                result.append("\n");
+            }
+
+            return result.toString();
+        }
+
+        public int countAlive() {
+            int count = 0;
+            for (Cell[] line : getCells()) {
+                for (Cell cell : line) {
+                    if (cell.isAlive()) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        public Cell[][] getCells() {
+            return cells;
+        }
+
+    }
+  learner_created: true
+- name: src/life/Cell.java
+  visible: true
+  text: |
+    package life;
+
+    public class Cell {
+
+        private int positionX;
+        private int positionY;
+        private boolean alive;
+
+        public Cell(int positionX, int positionY, boolean alive) {
+            this.setPositionX(positionX);
+            this.setPositionY(positionY);
+            this.setAlive(alive);
+        }
+
+
+        public int getPositionX() {
+            return positionX;
+        }
+
+        private void setPositionX(int positionX) {
+            this.positionX = positionX;
+        }
+
+        public int getPositionY() {
+            return positionY;
+        }
+
+        private void setPositionY(int positionY) {
+            this.positionY = positionY;
+        }
+
+        public boolean isAlive() {
+            return alive;
+        }
+
+        public void setAlive(boolean alive) {
+            this.alive = alive;
+        }
+
+        @Override
+        public String toString() {
+            return positionX + " " + positionY + " " + alive;
+        }
+    }
+  learner_created: true
+feedback_link: https://hyperskill.org/projects/54/stages/299/implement#comment
+status: Solved
+feedback:
+  message: Congratulations! Continue on <a href="https://hyperskill.org/projects/54/stages/299/implement">JetBrains
+    Academy</a>
+  time: Wed, 25 Nov 2020 08:16:47 UTC
+record: -1
